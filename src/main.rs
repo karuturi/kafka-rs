@@ -1,5 +1,4 @@
-mod protocol;
-
+use kafka_rust::protocol;
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use anyhow::Result;
