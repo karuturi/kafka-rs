@@ -33,7 +33,7 @@ impl LogAppender {
             index,
             current_size,
             last_indexed_size: 0,
-            index_interval_bytes: 4096, // 4KB interval
+            index_interval_bytes: 0, // Index every message for Phase 1 accuracy
         })
     }
 
