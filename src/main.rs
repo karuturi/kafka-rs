@@ -75,6 +75,31 @@ async fn handle_connection(mut socket: tokio::net::TcpStream, registry: Arc<Brok
                 socket.write_all(&res_len.to_be_bytes()).await?;
                 socket.write_all(&res_buf).await?;
             }
+            0 => { // Produce
+                let request = protocol::decode_produce_request(&mut body_mut)?;
+                if let Some(topic) = request.topic_data.first() {
+                    if let Some(partition) = topic.partition_data.first() {
+                        let topic_name = topic.name.to_string();
+                        let partition_index = partition.index;
+                        
+                        if let Some(tx) = registry.get_partition_tx(&topic_name, partition_index).await {
+                            let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
+                            tx.send(PartitionCommand::Append { 
+                                records: partition.records.clone().unwrap_or_default(), 
+                                resp_tx 
+                            }).await?;
+                            
+                            let base_offset = resp_rx.await?;
+                            let res_buf = protocol::encode_produce_response(
+                                header.correlation_id, topic_name, partition_index, base_offset)?;
+                            
+                            let res_len = res_buf.len() as u32;
+                            socket.write_all(&res_len.to_be_bytes()).await?;
+                            socket.write_all(&res_buf).await?;
+                        }
+                    }
+                }
+            }
             1 => { // Fetch
                 let request = protocol::decode_fetch_request(&mut body_mut)?;
                 // Simple implementation: handle first topic/partition requested
