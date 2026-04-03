@@ -29,6 +29,33 @@ async fn test_log_appender_writes_to_disk() {
 }
 
 #[tokio::test]
+async fn test_log_appender_read_with_index() {
+    let test_dir = PathBuf::from("target/test_storage/test_log_appender_read");
+    let log_path = test_dir.join("00000000000000000000.log");
+    let _ = tokio::fs::remove_dir_all(&test_dir).await;
+    
+    let mut appender = LogAppender::new(log_path.clone()).await.unwrap();
+    
+    // We'll append several records to trigger indexing (interval is 4KB)
+    // For testing, we might want to reduce the interval or just write enough data.
+    // Let's check what the interval is in LogAppender::new.
+    
+    let record = Bytes::from(vec![0u8; 1000]);
+    for i in 0..6 {
+        appender.append(record.clone(), i).await.unwrap();
+    }
+    
+    // Total size is 6000 bytes. With 4096 interval, we should have 2 index entries (at 0 and at 5000 because 5000-0 >= 4096).
+    
+    // Find position for offset 5
+    let pos = appender.find_position(5).await.unwrap();
+    assert!(pos >= 5000);
+    
+    let read_records = appender.read(pos, 1000).await.unwrap();
+    assert_eq!(read_records.len(), 1000);
+}
+
+#[tokio::test]
 async fn test_sparse_index_writes_to_disk() {
     let test_dir = PathBuf::from("target/test_storage/test_sparse_index");
     let index_path = test_dir.join("00000000000000000000.index");

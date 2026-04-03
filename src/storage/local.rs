@@ -80,6 +80,11 @@ impl LogAppender {
         Ok(Bytes::from(buf))
     }
 
+    pub async fn find_position(&self, logical_offset: u64) -> Result<u64> {
+        // For now, we use the logical_offset as the relative_offset in the index
+        self.index.find_position(logical_offset as u32).await
+    }
+
     pub fn size(&self) -> u64 {
         self.current_size
     }
