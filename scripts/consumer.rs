@@ -4,9 +4,17 @@ use kafka_protocol::messages::{FetchRequest, RequestHeader, ResponseHeader, Fetc
 use kafka_protocol::protocol::{Encodable, Decodable, StrBytes};
 use bytes::{BytesMut};
 use anyhow::Result;
+use std::env;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        eprintln!("Usage: {} <topic>", args[0]);
+        std::process::exit(1);
+    }
+    let topic_name = &args[1];
+
     let mut stream = TcpStream::connect("127.0.0.1:9092").await?;
     println!("Connected to 127.0.0.1:9092");
 
@@ -18,7 +26,7 @@ async fn main() -> Result<()> {
 
     let mut request = FetchRequest::default();
     let mut topic = FetchTopic::default();
-    topic.topic = StrBytes::from("test").into();
+    topic.topic = StrBytes::from(topic_name.clone()).into();
     
     let mut partition = FetchPartition::default();
     partition.partition = 0;
@@ -35,7 +43,7 @@ async fn main() -> Result<()> {
     let req_len = req_buf.len() as u32;
     stream.write_all(&req_len.to_be_bytes()).await?;
     stream.write_all(&req_buf).await?;
-    println!("Sent FetchRequest for 'test:0' from offset 0");
+    println!("Sent FetchRequest for '{}:0' from offset 0", topic_name);
 
     let mut res_len_buf = [0u8; 4];
     stream.read_exact(&mut res_len_buf).await?;
@@ -51,6 +59,7 @@ async fn main() -> Result<()> {
 
     if let Some(topic_res) = response.responses.first() {
         if let Some(part_res) = topic_res.partitions.first() {
+            println!("High Watermark: {}", part_res.high_watermark);
             if let Some(records) = &part_res.records {
                 println!("Message data: {:?}", String::from_utf8_lossy(records));
             } else {

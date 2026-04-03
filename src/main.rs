@@ -144,9 +144,9 @@ async fn handle_connection(mut socket: tokio::net::TcpStream, registry: Arc<Brok
                                 resp_tx 
                             }).await?;
                             
-                            let records = resp_rx.await?;
+                            let (records, high_watermark) = resp_rx.await?;
                             let res_buf = protocol::encode_fetch_response(
-                                header.correlation_id, topic_name, partition_index, records)?;
+                                header.correlation_id, topic_name, partition_index, records, high_watermark)?;
                             
                             let res_len = res_buf.len() as u32;
                             socket.write_all(&res_len.to_be_bytes()).await?;

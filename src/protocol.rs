@@ -71,7 +71,7 @@ pub fn decode_fetch_request(buf: &mut BytesMut) -> Result<FetchRequest> {
     FetchRequest::decode(buf, 11).map_err(|e| anyhow::anyhow!("Failed to decode FetchRequest: {:?}", e))
 }
 
-pub fn encode_fetch_response(correlation_id: i32, topic_name: String, partition_index: i32, records: bytes::Bytes) -> Result<BytesMut> {
+pub fn encode_fetch_response(correlation_id: i32, topic_name: String, partition_index: i32, records: bytes::Bytes, high_watermark: u64) -> Result<BytesMut> {
     let mut header = ResponseHeader::default();
     header.correlation_id = correlation_id;
 
@@ -82,6 +82,7 @@ pub fn encode_fetch_response(correlation_id: i32, topic_name: String, partition_
     
     let mut partition_res = PartitionData::default();
     partition_res.partition_index = partition_index.into();
+    partition_res.high_watermark = high_watermark as i64;
     partition_res.records = Some(records);
     
     topic_res.partitions.push(partition_res);

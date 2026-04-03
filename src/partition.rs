@@ -12,7 +12,7 @@ pub enum PartitionCommand {
     Fetch {
         offset: u64,
         max_bytes: u32,
-        resp_tx: oneshot::Sender<Bytes>,
+        resp_tx: oneshot::Sender<(Bytes, u64)>,
     },
 }
 
@@ -115,21 +115,21 @@ impl PartitionActor {
                             Ok(physical_position) => {
                                 match appender.read(physical_position, max_bytes).await {
                                     Ok(records) => {
-                                        let _ = resp_tx.send(records);
+                                        let _ = resp_tx.send((records, self.current_offset));
                                     }
                                     Err(e) => {
                                         eprintln!("Failed to read from log: {:?}", e);
-                                        let _ = resp_tx.send(Bytes::new());
+                                        let _ = resp_tx.send((Bytes::new(), self.current_offset));
                                     }
                                 }
                             }
                             Err(e) => {
                                 eprintln!("Failed to find position in index: {:?}", e);
-                                let _ = resp_tx.send(Bytes::new());
+                                let _ = resp_tx.send((Bytes::new(), self.current_offset));
                             }
                         }
                     } else {
-                        let _ = resp_tx.send(Bytes::new());
+                        let _ = resp_tx.send((Bytes::new(), self.current_offset));
                     }
                 }
             }

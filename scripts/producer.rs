@@ -1,12 +1,30 @@
 use tokio::net::TcpStream;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use kafka_protocol::messages::{ProduceRequest, RequestHeader, ResponseHeader, produce_request::{TopicProduceData, PartitionProduceData}};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, AsyncBufReadExt, BufReader};
+use kafka_protocol::messages::{ProduceRequest, ProduceResponse, RequestHeader, ResponseHeader, produce_request::{TopicProduceData, PartitionProduceData}};
 use kafka_protocol::protocol::{Encodable, Decodable, StrBytes};
 use bytes::{BytesMut, Bytes};
 use anyhow::Result;
+use std::env;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        eprintln!("Usage: echo \"message\" | {} <topic>", args[0]);
+        std::process::exit(1);
+    }
+    let topic_name = &args[1];
+
+    let mut stdin_reader = BufReader::new(tokio::io::stdin());
+    let mut message = String::new();
+    stdin_reader.read_line(&mut message).await?;
+    let message = message.trim();
+
+    if message.is_empty() {
+        eprintln!("No message received from stdin");
+        return Ok(());
+    }
+
     let mut stream = TcpStream::connect("127.0.0.1:9092").await?;
     println!("Connected to 127.0.0.1:9092");
 
@@ -18,11 +36,11 @@ async fn main() -> Result<()> {
 
     let mut request = ProduceRequest::default();
     let mut topic = TopicProduceData::default();
-    topic.name = StrBytes::from("test").into();
+    topic.name = StrBytes::from(topic_name.clone()).into();
     
     let mut partition = PartitionProduceData::default();
     partition.index = 0;
-    partition.records = Some(Bytes::from("Hello Kafka-RS from the Rust example!"));
+    partition.records = Some(Bytes::from(message.to_string()));
     
     topic.partition_data.push(partition);
     request.topic_data.push(topic);
@@ -34,7 +52,7 @@ async fn main() -> Result<()> {
     let req_len = req_buf.len() as u32;
     stream.write_all(&req_len.to_be_bytes()).await?;
     stream.write_all(&req_buf).await?;
-    println!("Sent ProduceRequest for 'test:0'");
+    println!("Sent ProduceRequest for '{}:0' with message: '{}'", topic_name, message);
 
     let mut res_len_buf = [0u8; 4];
     stream.read_exact(&mut res_len_buf).await?;
@@ -45,7 +63,13 @@ async fn main() -> Result<()> {
     let mut res_body_mut = BytesMut::from(&res_body_buf[..]);
     
     let _res_header = ResponseHeader::decode(&mut res_body_mut, 0)?;
-    println!("Received ProduceResponse");
+    let response = ProduceResponse::decode(&mut res_body_mut, 9)?;
+    
+    if let Some(topic_res) = response.responses.first() {
+        if let Some(part_res) = topic_res.partition_responses.first() {
+            println!("Received ProduceResponse: Offset={}", part_res.base_offset);
+        }
+    }
     
     Ok(())
 }
