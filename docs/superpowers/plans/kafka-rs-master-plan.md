@@ -1,3 +1,5 @@
+**Strict Mandate:** Use Test-Driven Development (TDD) for every feature and bug fix. Make a commit after every successful step or logical unit of work.
+
 # Kafka-RS Master Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task.
