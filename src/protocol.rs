@@ -16,12 +16,45 @@ pub fn decode_apiversions_request(buf: &mut BytesMut) -> Result<ApiVersionsReque
 }
 
 pub fn encode_apiversions_response(correlation_id: i32) -> Result<BytesMut> {
+    use kafka_protocol::messages::api_versions_response::ApiVersion;
+
     let mut header = ResponseHeader::default();
     header.correlation_id = correlation_id;
 
     let mut response = ApiVersionsResponse::default();
     response.error_code = 0;
     
+    // Produce
+    let mut produce = ApiVersion::default();
+    produce.api_key = 0;
+    produce.min_version = 0;
+    produce.max_version = 9;
+    response.api_keys.push(produce);
+
+    // Fetch
+    let mut fetch = ApiVersion::default();
+    fetch.api_key = 1;
+    fetch.min_version = 0;
+    fetch.max_version = 11;
+    response.api_keys.push(fetch);
+
+    // Metadata
+    let mut metadata = ApiVersion::default();
+    metadata.api_key = 3;
+    metadata.min_version = 0;
+    metadata.max_version = 9;
+    response.api_keys.push(metadata);
+
+    // ApiVersions
+    let mut apiversions = ApiVersion::default();
+    apiversions.api_key = 18;
+    apiversions.min_version = 0;
+    apiversions.max_version = 3;
+    response.api_keys.push(apiversions);
+
+    response.throttle_time_ms = 0;
+    response.finalized_features_epoch = -1;
+
     let mut res_buf = BytesMut::new();
     header.encode(&mut res_buf, 0).map_err(|e| anyhow::anyhow!("Failed to encode response header: {:?}", e))?;
     response.encode(&mut res_buf, 3).map_err(|e| anyhow::anyhow!("Failed to encode ApiVersionsResponse: {:?}", e))?;
@@ -38,23 +71,32 @@ pub fn encode_metadata_response(correlation_id: i32, topics: Vec<String>) -> Res
     header.correlation_id = correlation_id;
 
     let mut response = MetadataResponse::default();
+    response.controller_id = 1.into();
+    response.cluster_id = Some(StrBytes::from("kafka-rs-cluster").into());
     
     // Minimal broker info (node 1)
     let mut broker = MetadataResponseBroker::default();
     broker.node_id = 1.into();
     broker.host = "127.0.0.1".into();
     broker.port = 9092;
-    response.brokers.insert(1 as usize, broker);
+    // broker.rack is already None by default
+    response.brokers.push(broker);
 
+    // If topics is empty, it means "all topics" in many Kafka versions
+    // but here the registry will be used by the caller to pass all topics if empty.
+    
     for topic_name in topics {
         let mut topic = MetadataResponseTopic::default();
         topic.name = Some(StrBytes::from(topic_name).into());
+        topic.error_code = 0;
+        topic.is_internal = false;
         
         let mut partition = MetadataResponsePartition::default();
         partition.partition_index = 0.into();
         partition.leader_id = 1.into();
         partition.replica_nodes = vec![1.into()];
         partition.isr_nodes = vec![1.into()];
+        partition.error_code = 0;
         
         topic.partitions.push(partition);
         response.topics.push(topic);

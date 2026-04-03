@@ -25,4 +25,11 @@ impl BrokerRegistry {
         let partitions = self.partitions.lock().await;
         partitions.get(topic)?.get(&partition_id).cloned()
     }
+
+    pub async fn get_all_topics(&self) -> Vec<String> {
+        let partitions = self.partitions.lock().await;
+        let mut topics: Vec<String> = partitions.keys().cloned().collect();
+        topics.sort();
+        topics
+    }
 }

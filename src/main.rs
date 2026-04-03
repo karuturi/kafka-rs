@@ -66,9 +66,13 @@ async fn handle_connection(mut socket: tokio::net::TcpStream, registry: Arc<Brok
             }
             3 => { // Metadata
                 let request = protocol::decode_metadata_request(&mut body_mut)?;
-                let topic_names = request.topics.unwrap_or_default().into_iter()
+                let mut topic_names: Vec<String> = request.topics.unwrap_or_default().into_iter()
                     .filter_map(|t| t.name.map(|n| n.to_string()))
                     .collect();
+                
+                if topic_names.is_empty() {
+                    topic_names = registry.get_all_topics().await;
+                }
                 
                 let res_buf = protocol::encode_metadata_response(header.correlation_id, topic_names)?;
                 let res_len = res_buf.len() as u32;
