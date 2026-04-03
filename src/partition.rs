@@ -22,6 +22,7 @@ pub struct PartitionActor {
     current_offset: u64,
     base_path: PathBuf,
     max_segment_size: u64,
+    segment_offsets: Vec<u64>,
 }
 
 impl PartitionActor {
@@ -35,7 +36,12 @@ impl PartitionActor {
             current_offset: 0,
             base_path,
             max_segment_size: 10 * 1024 * 1024, // 10MB default
+            segment_offsets: vec![0],
         })
+    }
+
+    pub fn set_max_segment_size(&mut self, size: u64) {
+        self.max_segment_size = size;
     }
 
     pub async fn run(mut self) {
@@ -49,6 +55,7 @@ impl PartitionActor {
                         let new_segment_path = self.base_path.join(format!("{:020}.log", logical_offset));
                         if let Ok(new_appender) = LogAppender::new(new_segment_path).await {
                             self.appender = new_appender;
+                            self.segment_offsets.push(logical_offset);
                         }
                     }
 
@@ -63,16 +70,36 @@ impl PartitionActor {
                     }
                 }
                 PartitionCommand::Fetch { offset, max_bytes, resp_tx } => {
-                    // For now, assume physical_position == logical_offset * 1024 as a placeholder
-                    // In a real implementation, we'd use the SparseIndex to find the position
-                    let physical_position = offset * 1024; // MOCK for Task 5
-                    match self.appender.read(physical_position, max_bytes).await {
-                        Ok(records) => {
-                            let _ = resp_tx.send(records);
+                    // Find the correct segment
+                    let mut segment_base_offset = 0;
+                    for &base in self.segment_offsets.iter().rev() {
+                        if offset >= base {
+                            segment_base_offset = base;
+                            break;
                         }
-                        Err(e) => {
-                            eprintln!("Failed to read from log: {:?}", e);
+                    }
+
+                    let segment_path = self.base_path.join(format!("{:020}.log", segment_base_offset));
+                    if let Ok(appender) = LogAppender::new(segment_path).await {
+                        match appender.find_position(offset).await {
+                            Ok(physical_position) => {
+                                match appender.read(physical_position, max_bytes).await {
+                                    Ok(records) => {
+                                        let _ = resp_tx.send(records);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Failed to read from log: {:?}", e);
+                                        let _ = resp_tx.send(Bytes::new());
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to find position in index: {:?}", e);
+                                let _ = resp_tx.send(Bytes::new());
+                            }
                         }
+                    } else {
+                        let _ = resp_tx.send(Bytes::new());
                     }
                 }
             }
