@@ -82,7 +82,28 @@ async fn handle_connection(mut socket: tokio::net::TcpStream, registry: Arc<Brok
                         let topic_name = topic.name.to_string();
                         let partition_index = partition.index;
                         
-                        if let Some(tx) = registry.get_partition_tx(&topic_name, partition_index).await {
+                        let tx = if let Some(tx) = registry.get_partition_tx(&topic_name, partition_index).await {
+                            Some(tx)
+                        } else {
+                            // Auto-create partition
+                            let (tx, rx) = mpsc::channel(100);
+                            let storage_path = PathBuf::from(format!("storage/{}-{}", topic_name, partition_index));
+                            match PartitionActor::new(rx, storage_path).await {
+                                Ok(actor) => {
+                                    tokio::spawn(async move {
+                                        let _ = actor.run().await;
+                                    });
+                                    registry.register_partition(topic_name.clone(), partition_index, tx.clone()).await;
+                                    Some(tx)
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to create partition actor: {:?}", e);
+                                    None
+                                }
+                            }
+                        };
+
+                        if let Some(tx) = tx {
                             let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
                             tx.send(PartitionCommand::Append { 
                                 records: partition.records.clone().unwrap_or_default(), 
@@ -93,6 +114,13 @@ async fn handle_connection(mut socket: tokio::net::TcpStream, registry: Arc<Brok
                             let res_buf = protocol::encode_produce_response(
                                 header.correlation_id, topic_name, partition_index, base_offset)?;
                             
+                            let res_len = res_buf.len() as u32;
+                            socket.write_all(&res_len.to_be_bytes()).await?;
+                            socket.write_all(&res_buf).await?;
+                        } else {
+                            // Still send a response but with error (offset -1 for now as a simple error signal)
+                            let res_buf = protocol::encode_produce_response(
+                                header.correlation_id, topic_name, partition_index, u64::MAX)?;
                             let res_len = res_buf.len() as u32;
                             socket.write_all(&res_len.to_be_bytes()).await?;
                             socket.write_all(&res_buf).await?;

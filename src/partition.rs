@@ -27,16 +27,46 @@ pub struct PartitionActor {
 
 impl PartitionActor {
     pub async fn new(receiver: mpsc::Receiver<PartitionCommand>, base_path: PathBuf) -> Result<Self> {
-        let active_segment_path = base_path.join(format!("{:020}.log", 0));
+        if !base_path.exists() {
+            tokio::fs::create_dir_all(&base_path).await?;
+        }
+
+        let mut segment_offsets = Vec::new();
+        let mut dir = tokio::fs::read_dir(&base_path).await?;
+        while let Some(entry) = dir.next_entry().await? {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("log") {
+                if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
+                    if let Ok(offset) = name.parse::<u64>() {
+                        segment_offsets.push(offset);
+                    }
+                }
+            }
+        }
+        segment_offsets.sort();
+
+        if segment_offsets.is_empty() {
+            segment_offsets.push(0);
+        }
+
+        let last_base_offset = *segment_offsets.last().unwrap();
+        let active_segment_path = base_path.join(format!("{:020}.log", last_base_offset));
         let appender = LogAppender::new(active_segment_path).await?;
+        
+        let last_offset = appender.find_last_offset().await.unwrap_or(last_base_offset);
+        let current_offset = if last_offset == 0 && appender.size() == 0 {
+            0
+        } else {
+            last_offset + 1
+        };
         
         Ok(Self {
             receiver,
             appender,
-            current_offset: 0,
+            current_offset,
             base_path,
             max_segment_size: 10 * 1024 * 1024, // 10MB default
-            segment_offsets: vec![0],
+            segment_offsets,
         })
     }
 

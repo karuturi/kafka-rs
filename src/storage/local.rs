@@ -88,4 +88,11 @@ impl LogAppender {
     pub fn size(&self) -> u64 {
         self.current_size
     }
+
+    pub async fn find_last_offset(&self) -> Result<u64> {
+        // This is a simplified implementation. In real Kafka, we'd read the last record header.
+        // For our current implementation, we just use the index to find the last indexed offset.
+        // Since we don't have full record headers yet, we'll return the highest offset in the index.
+        self.index.find_last_offset().await
+    }
 }
