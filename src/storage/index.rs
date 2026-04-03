@@ -69,4 +69,25 @@ impl SparseIndex {
         
         Ok(offset as u64)
     }
+
+    pub async fn find_last_pos(&self) -> Result<u64> {
+        use tokio::io::{AsyncReadExt, AsyncSeekExt};
+        if !self.path.exists() {
+            return Ok(0);
+        }
+
+        let mut file = tokio::fs::File::open(&self.path).await?;
+        let len = file.metadata().await?.len();
+        if len < 8 {
+            return Ok(0);
+        }
+
+        // Read the last 8-byte entry
+        file.seek(std::io::SeekFrom::End(-8)).await?;
+        let mut buf = [0u8; 8];
+        file.read_exact(&mut buf).await?;
+        let position = u32::from_be_bytes([buf[4], buf[5], buf[6], buf[7]]);
+        
+        Ok(position as u64)
+    }
 }
