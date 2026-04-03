@@ -3,6 +3,18 @@ name = "kafka-rust"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "kafka-rs"
+path = "src/main.rs"
+
+[[bin]]
+name = "producer"
+path = "scripts/producer.rs"
+
+[[bin]]
+name = "consumer"
+path = "scripts/consumer.rs"
+
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
 kafka-protocol = "0.17.0"
