@@ -51,3 +51,26 @@ async fn test_sparse_index_writes_to_disk() {
     assert_eq!(reader.get_u32(), 20);
     assert_eq!(reader.get_u32(), 2048);
 }
+
+#[tokio::test]
+async fn test_sparse_index_find_position() {
+    let test_dir = PathBuf::from("target/test_storage/test_sparse_index_lookup");
+    let index_path = test_dir.join("00000000000000000000.index");
+    let _ = tokio::fs::remove_dir_all(&test_dir).await;
+    tokio::fs::create_dir_all(&test_dir).await.unwrap();
+
+    let mut index = SparseIndex::new(index_path.clone());
+    index.add_entry(0, 0).await.unwrap();
+    index.add_entry(10, 1024).await.unwrap();
+    index.add_entry(20, 2048).await.unwrap();
+
+    // Exact match
+    assert_eq!(index.find_position(10).await.unwrap(), 1024);
+    
+    // Nearest lower bound
+    assert_eq!(index.find_position(15).await.unwrap(), 1024);
+    assert_eq!(index.find_position(25).await.unwrap(), 2048);
+    
+    // First entry
+    assert_eq!(index.find_position(5).await.unwrap(), 0);
+}
