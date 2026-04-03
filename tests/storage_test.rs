@@ -9,6 +9,7 @@ use bytes::Buf;
 async fn test_log_appender_writes_to_disk() {
     let test_dir = PathBuf::from("target/test_storage/test_log_appender");
     let log_path = test_dir.join("00000000000000000000.log");
+    let index_path = test_dir.join("00000000000000000000.index");
     
     // Clean up from previous runs
     let _ = tokio::fs::remove_dir_all(&test_dir).await;
@@ -16,12 +17,15 @@ async fn test_log_appender_writes_to_disk() {
     let mut appender = LogAppender::new(log_path.clone()).await.unwrap();
     
     let records1 = Bytes::from("first-record");
-    let offset1 = appender.append(records1.clone()).await.unwrap();
+    let offset1 = appender.append(records1.clone(), 0).await.unwrap();
     assert_eq!(offset1, 0);
     
     let records2 = Bytes::from("second");
-    let offset2 = appender.append(records2.clone()).await.unwrap();
+    let offset2 = appender.append(records2.clone(), 1).await.unwrap();
     assert_eq!(offset2, records1.len() as u64);
+
+    // Verify index was created (first append always indexes)
+    assert!(tokio::fs::metadata(&index_path).await.is_ok());
 }
 
 #[tokio::test]
