@@ -8,9 +8,9 @@
 
 ---
 
-## Phase 1: Foundation (Single Broker & Storage)
+## Phase 1: Foundation (Single Broker & Storage) ✅
 *Focus: Networking, Storage Engine, and Basic CLI Compatibility.*
-- [Plan: kafka-rs-phase1.md]
+- [Plan: kafka-rs-phase1.md] ✅
 
 ## Phase 2: Protocol Deep-Dive (The "Translator")
 *Focus: Custom binary protocol implementation (Replacing the crate).*
