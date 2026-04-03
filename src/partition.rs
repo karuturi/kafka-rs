@@ -62,8 +62,18 @@ impl PartitionActor {
                         }
                     }
                 }
-                PartitionCommand::Fetch { offset: _, max_bytes: _, resp_tx: _ } => {
-                    // Not implemented yet
+                PartitionCommand::Fetch { offset, max_bytes, resp_tx } => {
+                    // For now, assume physical_position == logical_offset * 1024 as a placeholder
+                    // In a real implementation, we'd use the SparseIndex to find the position
+                    let physical_position = offset * 1024; // MOCK for Task 5
+                    match self.appender.read(physical_position, max_bytes).await {
+                        Ok(records) => {
+                            let _ = resp_tx.send(records);
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to read from log: {:?}", e);
+                        }
+                    }
                 }
             }
         }

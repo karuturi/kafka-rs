@@ -1,5 +1,33 @@
-use kafka_protocol::messages::{ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse, RequestHeader, ResponseHeader};
+use kafka_protocol::messages::{ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse, RequestHeader, ResponseHeader, FetchRequest, FetchResponse};
 use kafka_protocol::messages::metadata_response::{MetadataResponseBroker, MetadataResponseTopic, MetadataResponsePartition};
+use kafka_protocol::messages::fetch_response::{FetchableTopicResponse, PartitionData};
+
+pub fn decode_fetch_request(buf: &mut BytesMut) -> Result<FetchRequest> {
+    FetchRequest::decode(buf, 11).map_err(|e| anyhow::anyhow!("Failed to decode FetchRequest: {:?}", e))
+}
+
+pub fn encode_fetch_response(correlation_id: i32, topic_name: String, partition_index: i32, records: bytes::Bytes) -> Result<BytesMut> {
+    let mut header = ResponseHeader::default();
+    header.correlation_id = correlation_id;
+
+    let mut response = FetchResponse::default();
+    
+    let mut topic_res = FetchableTopicResponse::default();
+    topic_res.topic = StrBytes::from(topic_name).into();
+    
+    let mut partition_res = PartitionData::default();
+    partition_res.partition_index = partition_index.into();
+    partition_res.records = Some(records);
+    
+    topic_res.partitions.push(partition_res);
+    response.responses.push(topic_res);
+
+    let mut res_buf = BytesMut::new();
+    header.encode(&mut res_buf, 0).map_err(|e| anyhow::anyhow!("Failed to encode response header: {:?}", e))?;
+    response.encode(&mut res_buf, 11).map_err(|e| anyhow::anyhow!("Failed to encode FetchResponse: {:?}", e))?;
+    
+    Ok(res_buf)
+}
 use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
 use bytes::{BytesMut};
 use anyhow::Result;

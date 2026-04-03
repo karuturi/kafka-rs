@@ -62,6 +62,24 @@ impl LogAppender {
         Ok(physical_position)
     }
 
+    pub async fn read(&self, physical_position: u64, max_bytes: u32) -> Result<Bytes> {
+        use tokio::io::{AsyncReadExt, AsyncSeekExt};
+        let mut file = File::open(&self.path).await?;
+        
+        let file_len = file.metadata().await?.len();
+        if physical_position >= file_len {
+            return Ok(Bytes::new());
+        }
+
+        let bytes_to_read = std::cmp::min(max_bytes as u64, file_len - physical_position);
+        let mut buf = vec![0u8; bytes_to_read as usize];
+        
+        file.seek(std::io::SeekFrom::Start(physical_position)).await?;
+        file.read_exact(&mut buf).await?;
+        
+        Ok(Bytes::from(buf))
+    }
+
     pub fn size(&self) -> u64 {
         self.current_size
     }
