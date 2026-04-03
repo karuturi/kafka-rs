@@ -16,7 +16,11 @@ async fn main() -> Result<()> {
     }
 }
 
-async fn handle_connection(_socket: tokio::net::TcpStream) -> Result<()> {
-    // Phase 1.1: Just log the connection
+async fn handle_connection(mut socket: tokio::net::TcpStream) -> Result<()> {
+    use tokio::io::AsyncReadExt;
+    let mut len_buf = [0u8; 4];
+    socket.read_exact(&mut len_buf).await?;
+    let len = u32::from_be_bytes(len_buf) as usize;
+    println!("Received request of length: {}", len);
     Ok(())
 }
